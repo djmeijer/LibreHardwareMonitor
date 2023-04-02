@@ -39,7 +39,7 @@ internal sealed class SuperIOHardware : Hardware
                                       out IList<Voltage> v,
                                       out IList<Temperature> t,
                                       out IList<Fan> f,
-                                      out IList<Ctrl> c,
+                                      out IList<Control> c,
                                       out _readVoltage,
                                       out _readTemperature,
                                       out _readFan,
@@ -63,15 +63,15 @@ internal sealed class SuperIOHardware : Hardware
         get { return _motherboard; }
     }
 
-    private void CreateControlSensors(ISuperIO superIO, ISettings settings, IList<Ctrl> c)
+    private void CreateControlSensors(ISuperIO superIO, ISettings settings, IList<Control> c)
     {
-        foreach (Ctrl ctrl in c)
+        foreach (Control ctrl in c)
         {
             int index = ctrl.Index;
             if (index < superIO.Controls.Length)
             {
                 Sensor sensor = new(ctrl.Name, index, SensorType.Control, this, settings);
-                Control control = new(sensor, settings, 0, 100);
+                LibreHardwareMonitor.Hardware.Control control = new(sensor, settings, 0, 100);
                 control.ControlModeChanged += cc =>
                 {
                     switch (cc.ControlMode)
@@ -114,7 +114,7 @@ internal sealed class SuperIOHardware : Hardware
         }
     }
 
-    private static byte GetSoftwareValueAsByte(Control control)
+    private static byte GetSoftwareValueAsByte(LibreHardwareMonitor.Hardware.Control control)
     {
         const float percentToByteRatio = 2.55f;
         float value = control.SoftwareValue * percentToByteRatio;
@@ -184,7 +184,7 @@ internal sealed class SuperIOHardware : Hardware
         out IList<Voltage> v,
         out IList<Temperature> t,
         out IList<Fan> f,
-        out IList<Ctrl> c,
+        out IList<Control> c,
         out ReadValueDelegate readVoltage,
         out ReadValueDelegate readTemperature,
         out ReadValueDelegate readFan,
@@ -203,7 +203,7 @@ internal sealed class SuperIOHardware : Hardware
         v = new List<Voltage>();
         t = new List<Temperature>();
         f = new List<Fan>();
-        c = new List<Ctrl>();
+        c = new List<Control>();
 
         switch (superIO.Chip)
         {
@@ -218,6 +218,7 @@ internal sealed class SuperIOHardware : Hardware
 
             case Chip.IT8613E:
             case Chip.IT8620E:
+            case Chip.IT8625E:
             case Chip.IT8628E:
             case Chip.IT8631E:
             case Chip.IT8655E:
@@ -232,8 +233,9 @@ internal sealed class SuperIOHardware : Hardware
                 GetIteConfigurationsB(superIO, manufacturer, model, v, t, f, c);
                 break;
 
-            case Chip.IT8695E:
-            case Chip.IT879XE:
+            case Chip.IT8795E:
+            case Chip.IT8792E:
+            case Chip.IT8790E:
                 GetIteConfigurationsC(superIO, manufacturer, model, v, t, f, c);
                 break;
 
@@ -286,8 +288,8 @@ internal sealed class SuperIOHardware : Hardware
                 f.Add(new Fan("System Fan", 0));
                 f.Add(new Fan("CPU Fan", 1));
                 f.Add(new Fan("Auxiliary Fan", 2));
-                c.Add(new Ctrl("Fan 1", 0));
-                c.Add(new Ctrl("Fan 2", 1));
+                c.Add(new Control("Fan 1", 0));
+                c.Add(new Control("Fan 2", 1));
                 break;
 
             case Chip.W83627THF:
@@ -305,9 +307,9 @@ internal sealed class SuperIOHardware : Hardware
                 f.Add(new Fan("System Fan", 0));
                 f.Add(new Fan("CPU Fan", 1));
                 f.Add(new Fan("Auxiliary Fan", 2));
-                c.Add(new Ctrl("System Fan", 0));
-                c.Add(new Ctrl("CPU Fan", 1));
-                c.Add(new Ctrl("Auxiliary Fan", 2));
+                c.Add(new Control("System Fan", 0));
+                c.Add(new Control("CPU Fan", 1));
+                c.Add(new Control("Auxiliary Fan", 2));
                 break;
 
             case Chip.NCT6771F:
@@ -334,7 +336,7 @@ internal sealed class SuperIOHardware : Hardware
                     f.Add(new Fan("Fan #" + (i + 1), i));
 
                 for (int i = 0; i < superIO.Controls.Length; i++)
-                    c.Add(new Ctrl("Fan #" + (i + 1), i));
+                    c.Add(new Control("Fan #" + (i + 1), i));
 
                 break;
 
@@ -353,47 +355,90 @@ internal sealed class SuperIOHardware : Hardware
                 GetNuvotonConfigurationD(superIO, manufacturer, model, v, t, f, c);
                 break;
 
+            case Chip.NCT6686D:
             case Chip.NCT6687D:
-                v.Add(new Voltage("+12V", 0));
-                v.Add(new Voltage("+5V", 1));
-                v.Add(new Voltage("Vcore", 2));
-                v.Add(new Voltage("Voltage #1", 3));
-                v.Add(new Voltage("DIMM", 4));
-                v.Add(new Voltage("CPU I/O", 5));
-                v.Add(new Voltage("CPU SA", 6));
-                v.Add(new Voltage("Voltage #2", 7));
-                v.Add(new Voltage("AVCC3", 8));
-                v.Add(new Voltage("VTT", 9));
-                v.Add(new Voltage("VRef", 10));
-                v.Add(new Voltage("VSB", 11));
-                v.Add(new Voltage("AVSB", 12));
-                v.Add(new Voltage("VBat", 13));
+                switch (manufacturer)
+                {
+                    case Manufacturer.ASRock when model == Model.Z790_Taichi:
+                        t.Add(new Temperature("CPU", 0));
+                        t.Add(new Temperature("Motherboard", 1));
+                        t.Add(new Temperature("MOS", 2));
 
-                t.Add(new Temperature("CPU", 0));
-                t.Add(new Temperature("System", 1));
-                t.Add(new Temperature("VRM MOS", 2));
-                t.Add(new Temperature("PCH", 3));
-                t.Add(new Temperature("CPU Socket", 4));
-                t.Add(new Temperature("PCIe x1", 5));
-                t.Add(new Temperature("M2_1", 6));
+                        f.Add(new Fan("CPU Fan #1", 0));
+                        f.Add(new Fan("Chassis Fan #4", 1));
+                        f.Add(new Fan("CPU Fan #2", 2));
+                        f.Add(new Fan("Chassis Fan #2", 3));
+                        f.Add(new Fan("Chassis Fan #1", 4));
+                        f.Add(new Fan("MOS Fan #1", 5));
 
-                f.Add(new Fan("CPU Fan", 0));
-                f.Add(new Fan("Pump Fan", 1));
-                f.Add(new Fan("System Fan #1", 2));
-                f.Add(new Fan("System Fan #2", 3));
-                f.Add(new Fan("System Fan #3", 4));
-                f.Add(new Fan("System Fan #4", 5));
-                f.Add(new Fan("System Fan #5", 6));
-                f.Add(new Fan("System Fan #6", 7));
+                        c.Add(new Control("CPU Fan #1", 0));
+                        c.Add(new Control("Chassis Fan #4", 1));
+                        c.Add(new Control("CPU Fan #2", 2));
+                        c.Add(new Control("Chassis Fan #2", 3));
+                        c.Add(new Control("Chassis Fan #1", 4));
+                        c.Add(new Control("MOS Fan #1", 5));
+                        break;
+                    default:
+                        v.Add(new Voltage("+12V", 0));
+                        v.Add(new Voltage("+5V", 1));
+                        v.Add(new Voltage("Vcore", 2));
+                        v.Add(new Voltage("Voltage #1", 3));
+                        v.Add(new Voltage("DIMM", 4));
+                        v.Add(new Voltage("CPU I/O", 5));
+                        v.Add(new Voltage("CPU SA", 6));
+                        v.Add(new Voltage("Voltage #2", 7));
+                        v.Add(new Voltage("AVCC3", 8));
+                        v.Add(new Voltage("VTT", 9));
+                        v.Add(new Voltage("VRef", 10));
+                        v.Add(new Voltage("VSB", 11));
+                        v.Add(new Voltage("AVSB", 12));
+                        v.Add(new Voltage("VBat", 13));
 
-                c.Add(new Ctrl("CPU Fan", 0));
-                c.Add(new Ctrl("Pump Fan", 1));
-                c.Add(new Ctrl("System Fan #1", 2));
-                c.Add(new Ctrl("System Fan #2", 3));
-                c.Add(new Ctrl("System Fan #3", 4));
-                c.Add(new Ctrl("System Fan #4", 5));
-                c.Add(new Ctrl("System Fan #5", 6));
-                c.Add(new Ctrl("System Fan #6", 7));
+                        t.Add(new Temperature("CPU", 0));
+                        t.Add(new Temperature("System", 1));
+                        t.Add(new Temperature("VRM MOS", 2));
+                        t.Add(new Temperature("PCH", 3));
+                        t.Add(new Temperature("CPU Socket", 4));
+                        t.Add(new Temperature("PCIe x1", 5));
+                        t.Add(new Temperature("M2_1", 6));
+
+                        f.Add(new Fan("CPU Fan", 0));
+                        f.Add(new Fan("Pump Fan", 1));
+                        f.Add(new Fan("System Fan #1", 2));
+                        f.Add(new Fan("System Fan #2", 3));
+                        f.Add(new Fan("System Fan #3", 4));
+                        f.Add(new Fan("System Fan #4", 5));
+                        f.Add(new Fan("System Fan #5", 6));
+                        f.Add(new Fan("System Fan #6", 7));
+
+                        c.Add(new Control("CPU Fan", 0));
+                        c.Add(new Control("Pump Fan", 1));
+                        c.Add(new Control("System Fan #1", 2));
+                        c.Add(new Control("System Fan #2", 3));
+                        c.Add(new Control("System Fan #3", 4));
+                        c.Add(new Control("System Fan #4", 5));
+                        c.Add(new Control("System Fan #5", 6));
+                        c.Add(new Control("System Fan #6", 7));
+
+                        break;
+                }
+
+                break;
+
+            case Chip.IPMI:
+                Ipmi ipmi = (Ipmi)superIO;
+
+                foreach (Temperature temperature in ipmi.GetTemperatures())
+                    t.Add(temperature);
+
+                foreach (Fan fan in ipmi.GetFans())
+                    f.Add(fan);
+
+                foreach (Voltage voltage in ipmi.GetVoltages())
+                    v.Add(voltage);
+
+                foreach (Control control in ipmi.GetControls())
+                    c.Add(control);
 
                 break;
 
@@ -403,7 +448,7 @@ internal sealed class SuperIOHardware : Hardware
         }
     }
 
-    private static void GetDefaultConfiguration(ISuperIO superIO, ICollection<Voltage> v, ICollection<Temperature> t, ICollection<Fan> f, ICollection<Ctrl> c)
+    private static void GetDefaultConfiguration(ISuperIO superIO, ICollection<Voltage> v, ICollection<Temperature> t, ICollection<Fan> f, ICollection<Control> c)
     {
         for (int i = 0; i < superIO.Voltages.Length; i++)
             v.Add(new Voltage("Voltage #" + (i + 1), i, true));
@@ -415,7 +460,7 @@ internal sealed class SuperIOHardware : Hardware
             f.Add(new Fan("Fan #" + (i + 1), i));
 
         for (int i = 0; i < superIO.Controls.Length; i++)
-            c.Add(new Ctrl("Fan #" + (i + 1), i));
+            c.Add(new Control("Fan #" + (i + 1), i));
     }
 
     private static void GetIteConfigurationsA
@@ -426,7 +471,7 @@ internal sealed class SuperIOHardware : Hardware
         IList<Voltage> v,
         IList<Temperature> t,
         IList<Fan> f,
-        ICollection<Ctrl> c,
+        ICollection<Control> c,
         ref ReadValueDelegate readFan,
         ref UpdateDelegate postUpdate,
         ref Mutex mutex)
@@ -522,7 +567,7 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("Fan 6", 5));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
 
@@ -544,7 +589,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
                 }
@@ -644,7 +689,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
                 }
@@ -779,9 +824,9 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("System Fan #1", 1));
                         f.Add(new Fan("System Fan #2", 2));
                         f.Add(new Fan("Power Fan", 4));
-                        c.Add(new Ctrl("PWM #1", 0));
-                        c.Add(new Ctrl("PWM #2", 1));
-                        c.Add(new Ctrl("PWM #3", 2));
+                        c.Add(new Control("PWM #1", 0));
+                        c.Add(new Control("PWM #2", 1));
+                        c.Add(new Control("PWM #3", 2));
 
                         break;
 
@@ -871,7 +916,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
                 }
@@ -896,7 +941,7 @@ internal sealed class SuperIOHardware : Hardware
                     f.Add(new Fan("Fan #" + (i + 1), i));
 
                 for (int i = 0; i < superIO.Controls.Length; i++)
-                    c.Add(new Ctrl("Fan #" + (i + 1), i));
+                    c.Add(new Control("Fan #" + (i + 1), i));
 
                 break;
         }
@@ -976,7 +1021,7 @@ internal sealed class SuperIOHardware : Hardware
         }
     }
 
-    private static void GetIteConfigurationsB(ISuperIO superIO, Manufacturer manufacturer, Model model, IList<Voltage> v, IList<Temperature> t, IList<Fan> f, IList<Ctrl> c)
+    private static void GetIteConfigurationsB(ISuperIO superIO, Manufacturer manufacturer, Model model, IList<Voltage> v, IList<Temperature> t, IList<Fan> f, IList<Control> c)
     {
         switch (manufacturer)
         {
@@ -1003,9 +1048,8 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("Chassis Fan #1", 1));
                         f.Add(new Fan("Chassis Fan #2", 2));
 
-                        //offset: 2, because the first two always show zero
-                        for (int i = 2; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i - 1), i));
+                        for (int i = 0; i < superIO.Controls.Length; i++)
+                            c.Add(new Control("Fan #" + i, i));
 
                         break;
 
@@ -1027,7 +1071,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
                 }
@@ -1071,7 +1115,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
                 }
@@ -1127,8 +1171,8 @@ internal sealed class SuperIOHardware : Hardware
                         t.Add(new Temperature("System", 0));
                         f.Add(new Fan("CPU Fan", 0));
                         f.Add(new Fan("System Fan", 1));
-                        c.Add(new Ctrl("CPU Fan", 0));
-                        c.Add(new Ctrl("System Fan", 1));
+                        c.Add(new Control("CPU Fan", 0));
+                        c.Add(new Control("System Fan", 1));
 
                         break;
 
@@ -1155,8 +1199,8 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("CPU Fan", 0));
                         f.Add(new Fan("System Fan", 1));
 
-                        c.Add(new Ctrl("CPU Fan", 0));
-                        c.Add(new Ctrl("System Fan", 1));
+                        c.Add(new Control("CPU Fan", 0));
+                        c.Add(new Control("System Fan", 1));
 
                         break;
 
@@ -1206,7 +1250,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
 
@@ -1231,7 +1275,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
 
@@ -1259,11 +1303,11 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("System Fan #2", 2));
                         f.Add(new Fan("System Fan #3", 3));
                         f.Add(new Fan("CPU Optional Fan", 4));
-                        c.Add(new Ctrl("CPU Fan", 0));
-                        c.Add(new Ctrl("System Fan #1", 1));
-                        c.Add(new Ctrl("System Fan #2", 2));
-                        c.Add(new Ctrl("System Fan #3", 3));
-                        c.Add(new Ctrl("CPU Optional Fan", 4));
+                        c.Add(new Control("CPU Fan", 0));
+                        c.Add(new Control("System Fan #1", 1));
+                        c.Add(new Control("System Fan #2", 2));
+                        c.Add(new Control("System Fan #3", 3));
+                        c.Add(new Control("CPU Optional Fan", 4));
 
                         break;
 
@@ -1288,11 +1332,11 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("System Fan #2", 2));
                         f.Add(new Fan("PCH Fan", 3));
                         f.Add(new Fan("CPU Optional Fan", 4));
-                        c.Add(new Ctrl("CPU Fan", 0));
-                        c.Add(new Ctrl("System Fan #1", 1));
-                        c.Add(new Ctrl("System Fan #2", 2));
-                        c.Add(new Ctrl("PCH Fan", 3));
-                        c.Add(new Ctrl("CPU Optional Fan", 4));
+                        c.Add(new Control("CPU Fan", 0));
+                        c.Add(new Control("System Fan #1", 1));
+                        c.Add(new Control("System Fan #2", 2));
+                        c.Add(new Control("PCH Fan", 3));
+                        c.Add(new Control("CPU Optional Fan", 4));
 
                         break;
 
@@ -1318,11 +1362,11 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("System Fan #2", 2));
                         f.Add(new Fan("PCH Fan", 3));
                         f.Add(new Fan("CPU Optional Fan", 4));
-                        c.Add(new Ctrl("CPU Fan", 0));
-                        c.Add(new Ctrl("System Fan #1", 1));
-                        c.Add(new Ctrl("System Fan #2", 2));
-                        c.Add(new Ctrl("PCH Fan", 3));
-                        c.Add(new Ctrl("CPU Optional Fan", 4));
+                        c.Add(new Control("CPU Fan", 0));
+                        c.Add(new Control("System Fan #1", 1));
+                        c.Add(new Control("System Fan #2", 2));
+                        c.Add(new Control("PCH Fan", 3));
+                        c.Add(new Control("CPU Optional Fan", 4));
 
                         break;
 
@@ -1345,11 +1389,11 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("System Fan #2", 2));
                         f.Add(new Fan("PCH Fan", 3));
                         f.Add(new Fan("CPU Optional Fan", 4));
-                        c.Add(new Ctrl("CPU Fan", 0));
-                        c.Add(new Ctrl("System Fan #1", 1));
-                        c.Add(new Ctrl("System Fan #2", 2));
-                        c.Add(new Ctrl("PCH Fan", 3));
-                        c.Add(new Ctrl("CPU Optional Fan", 4));
+                        c.Add(new Control("CPU Fan", 0));
+                        c.Add(new Control("System Fan #1", 1));
+                        c.Add(new Control("System Fan #2", 2));
+                        c.Add(new Control("PCH Fan", 3));
+                        c.Add(new Control("CPU Optional Fan", 4));
 
                         break;
 
@@ -1377,10 +1421,10 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("System Fan #1", 1));
                         f.Add(new Fan("System Fan #2", 2));
                         f.Add(new Fan("System Fan #3", 3));
-                        c.Add(new Ctrl("CPU Fan", 0));
-                        c.Add(new Ctrl("System Fan #1", 1));
-                        c.Add(new Ctrl("System Fan #2", 2));
-                        c.Add(new Ctrl("System Fan #3", 3));
+                        c.Add(new Control("CPU Fan", 0));
+                        c.Add(new Control("System Fan #1", 1));
+                        c.Add(new Control("System Fan #2", 2));
+                        c.Add(new Control("System Fan #3", 3));
 
                         break;
 
@@ -1407,11 +1451,11 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("System Fan #2", 2));
                         f.Add(new Fan("System Fan #3", 3));
                         f.Add(new Fan("CPU Optional Fan", 4));
-                        c.Add(new Ctrl("CPU Fan", 0));
-                        c.Add(new Ctrl("System Fan #1", 1));
-                        c.Add(new Ctrl("System Fan #2", 2));
-                        c.Add(new Ctrl("System Fan #3", 3));
-                        c.Add(new Ctrl("CPU Optional Fan", 4));
+                        c.Add(new Control("CPU Fan", 0));
+                        c.Add(new Control("System Fan #1", 1));
+                        c.Add(new Control("System Fan #2", 2));
+                        c.Add(new Control("System Fan #3", 3));
+                        c.Add(new Control("CPU Optional Fan", 4));
 
                         break;
 
@@ -1436,11 +1480,11 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("System Fan #2", 2));
                         f.Add(new Fan("System Fan #3", 3));
                         f.Add(new Fan("CPU Optional Fan", 4));
-                        c.Add(new Ctrl("CPU Fan", 0));
-                        c.Add(new Ctrl("System Fan #1", 1));
-                        c.Add(new Ctrl("System Fan #2", 2));
-                        c.Add(new Ctrl("System Fan #3", 3));
-                        c.Add(new Ctrl("CPU Optional Fan", 4));
+                        c.Add(new Control("CPU Fan", 0));
+                        c.Add(new Control("System Fan #1", 1));
+                        c.Add(new Control("System Fan #2", 2));
+                        c.Add(new Control("System Fan #3", 3));
+                        c.Add(new Control("CPU Optional Fan", 4));
                         break;
 
                     case Model.Z690_GAMING_X_DDR4:
@@ -1456,12 +1500,12 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("System Fan #3", 3));
                         f.Add(new Fan("CPU Optional Fan", 4));
                         f.Add(new Fan("System Fan #4 / Pump", 5));
-                        c.Add(new Ctrl("CPU Fan", 0));
-                        c.Add(new Ctrl("System Fan #1", 1));
-                        c.Add(new Ctrl("System Fan #2", 2));
-                        c.Add(new Ctrl("System Fan #3", 3));
-                        c.Add(new Ctrl("CPU Optional Fan", 4));
-                        c.Add(new Ctrl("System Fan #4 / Pump", 5));
+                        c.Add(new Control("CPU Fan", 0));
+                        c.Add(new Control("System Fan #1", 1));
+                        c.Add(new Control("System Fan #2", 2));
+                        c.Add(new Control("System Fan #3", 3));
+                        c.Add(new Control("CPU Optional Fan", 4));
+                        c.Add(new Control("System Fan #4 / Pump", 5));
                         break;
 
                     case Model.Z68A_D3H_B3: // IT8728F
@@ -1563,7 +1607,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
                 }
@@ -1580,7 +1624,7 @@ internal sealed class SuperIOHardware : Hardware
                         v.Add(new Voltage("Vcore", 0, 0, 1));
                         v.Add(new Voltage("DIMM", 1, 0, 1));
                         v.Add(new Voltage("+12V", 2, 5, 1)); // Reads higher than it should.
-                        v.Add(new Voltage("+5V", 3, 147, 100));  // Reads higher than it should.
+                        v.Add(new Voltage("+5V", 3, 147, 100)); // Reads higher than it should.
                         // Commented because I don't know if it makes sense.
                         //v.Add(new Voltage("VCC ST", 4)); // Reads 4.2V.
                         //v.Add(new Voltage("VCCIN AUX", 5)); // Reads 2.2V.
@@ -1588,14 +1632,41 @@ internal sealed class SuperIOHardware : Hardware
                         //v.Add(new Voltage("3VSB", 7, 10, 10)); // Reads 5.8V ?
                         v.Add(new Voltage("VBat", 8, 10, 10)); // Reads higher than it should at 3.4V.
                         t.Add(new Temperature("System 1", 0));
-                        t.Add(new Temperature("System 2", 1));  // Not sure what sensor is this.
+                        t.Add(new Temperature("System 2", 1)); // Not sure what sensor is this.
                         t.Add(new Temperature("CPU", 2));
                         f.Add(new Fan("CPU Fan", 1));
                         f.Add(new Fan("CPU Optional fan", 2));
                         f.Add(new Fan("System Fan", 4));
-                        c.Add(new Ctrl("CPU Fan", 1));
-                        c.Add(new Ctrl("CPU Optional Fan", 2));
-                        c.Add(new Ctrl("System Fan", 4));
+                        c.Add(new Control("CPU Fan", 1));
+                        c.Add(new Control("CPU Optional Fan", 2));
+                        c.Add(new Control("System Fan", 4));
+
+                        break;
+
+                    case Model.X670E_Valkyrie: //IT8625E
+                        v.Add(new Voltage("Vcore", 0));
+                        v.Add(new Voltage("DIMM", 1));
+                        v.Add(new Voltage("+12V", 2, 10, 2));
+                        // Voltage of unknown use
+                        v.Add(new Voltage("Voltage #4", 3, true));
+                        // The biostar utility shows CPU MISC Voltage.
+                        v.Add(new Voltage("Voltage #5", 4));
+                        v.Add(new Voltage("VDDP", 5));
+                        v.Add(new Voltage("VSOC", 6));
+
+                        t.Add(new Temperature("CPU", 0));
+                        t.Add(new Temperature("VRM", 1));
+                        t.Add(new Temperature("System", 2));
+
+                        f.Add(new Fan("CPU Fan", 0));
+                        f.Add(new Fan("CPU Optional Fan", 1));
+                        for (int i = 2; i < superIO.Fans.Length; i++)
+                            f.Add(new Fan($"System Fan #{i - 1}", i));
+
+                        c.Add(new Control("CPU Fan", 0));
+                        c.Add(new Control("CPU Optional Fan", 1));
+                        for (int i = 2; i < superIO.Controls.Length; i++)
+                            c.Add(new Control($"System Fan #{i - 1}", i));
 
                         break;
 
@@ -1617,7 +1688,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
                 }
@@ -1659,7 +1730,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
                 }
@@ -1684,13 +1755,13 @@ internal sealed class SuperIOHardware : Hardware
                     f.Add(new Fan("Fan #" + (i + 1), i));
 
                 for (int i = 0; i < superIO.Controls.Length; i++)
-                    c.Add(new Ctrl("Fan #" + (i + 1), i));
+                    c.Add(new Control("Fan #" + (i + 1), i));
 
                 break;
         }
     }
 
-    private static void GetIteConfigurationsC(ISuperIO superIO, Manufacturer manufacturer, Model model, IList<Voltage> v, IList<Temperature> t, IList<Fan> f, IList<Ctrl> c)
+    private static void GetIteConfigurationsC(ISuperIO superIO, Manufacturer manufacturer, Model model, IList<Voltage> v, IList<Temperature> t, IList<Fan> f, IList<Control> c)
     {
         switch (manufacturer)
         {
@@ -1714,6 +1785,9 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("System Fan #5 Pump", 0));
                         f.Add(new Fan("System Fan #6 Pump", 1));
                         f.Add(new Fan("System Fan #4", 2));
+                        c.Add(new Control("System Fan #5 Pump", 0));
+                        c.Add(new Control("System Fan #6 Pump", 1));
+                        c.Add(new Control("System Fan #4", 2));
 
                         break;
 
@@ -1733,7 +1807,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
 
@@ -1753,9 +1827,9 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("System Fan #5 Pump", 0));
                         f.Add(new Fan("System Fan #6 Pump", 1));
                         f.Add(new Fan("System Fan #4", 2));
-                        c.Add(new Ctrl("Fan #5", 0));
-                        c.Add(new Ctrl("Fan #6", 1));
-                        c.Add(new Ctrl("Fan #4", 2));
+                        c.Add(new Control("Fan #5", 0));
+                        c.Add(new Control("Fan #6", 1));
+                        c.Add(new Control("Fan #4", 2));
 
                         break;
 
@@ -1766,9 +1840,9 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("System Fan #5 Pump", 0));
                         f.Add(new Fan("System Fan #6 Pump", 1));
                         f.Add(new Fan("System Fan #4", 2));
-                        c.Add(new Ctrl("System Fan #5 Pump", 0));
-                        c.Add(new Ctrl("System Fan #6 Pump", 1));
-                        c.Add(new Ctrl("System Fan #4", 2));
+                        c.Add(new Control("System Fan #5 Pump", 0));
+                        c.Add(new Control("System Fan #6 Pump", 1));
+                        c.Add(new Control("System Fan #4", 2));
                         break;
 
                     default:
@@ -1789,7 +1863,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
                 }
@@ -1814,13 +1888,13 @@ internal sealed class SuperIOHardware : Hardware
                     f.Add(new Fan("Fan #" + (i + 1), i));
 
                 for (int i = 0; i < superIO.Controls.Length; i++)
-                    c.Add(new Ctrl("Fan #" + (i + 1), i));
+                    c.Add(new Control("Fan #" + (i + 1), i));
 
                 break;
         }
     }
 
-    private static void GetFintekConfiguration(ISuperIO superIO, Manufacturer manufacturer, Model model, IList<Voltage> v, IList<Temperature> t, IList<Fan> f, IList<Ctrl> c)
+    private static void GetFintekConfiguration(ISuperIO superIO, Manufacturer manufacturer, Model model, IList<Voltage> v, IList<Temperature> t, IList<Fan> f, IList<Control> c)
     {
         switch (manufacturer)
         {
@@ -1888,13 +1962,13 @@ internal sealed class SuperIOHardware : Hardware
                     f.Add(new Fan("Fan #" + (i + 1), i));
 
                 for (int i = 0; i < superIO.Controls.Length; i++)
-                    c.Add(new Ctrl("Fan #" + (i + 1), i));
+                    c.Add(new Control("Fan #" + (i + 1), i));
 
                 break;
         }
     }
 
-    private static void GetNuvotonConfigurationF(ISuperIO superIO, Manufacturer manufacturer, Model model, IList<Voltage> v, IList<Temperature> t, IList<Fan> f, IList<Ctrl> c)
+    private static void GetNuvotonConfigurationF(ISuperIO superIO, Manufacturer manufacturer, Model model, IList<Voltage> v, IList<Temperature> t, IList<Fan> f, IList<Control> c)
     {
         switch (manufacturer)
         {
@@ -1918,9 +1992,9 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("CPU Fan", 1));
                         f.Add(new Fan("Power Fan", 2));
                         f.Add(new Fan("Chassis Fan #2", 3));
-                        c.Add(new Ctrl("Chassis Fan #2", 0));
-                        c.Add(new Ctrl("CPU Fan", 1));
-                        c.Add(new Ctrl("Chassis Fan #1", 2));
+                        c.Add(new Control("Chassis Fan #2", 0));
+                        c.Add(new Control("CPU Fan", 1));
+                        c.Add(new Control("Chassis Fan #1", 2));
 
                         break;
 
@@ -1960,7 +2034,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
 
@@ -1979,7 +2053,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
 
@@ -2002,7 +2076,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
                 }
@@ -2028,9 +2102,9 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("CPU Fan", 1));
                             f.Add(new Fan("Power Fan", 2));
                             f.Add(new Fan("Chassis Fan #2", 3));
-                            c.Add(new Ctrl("Chassis Fan #2", 0));
-                            c.Add(new Ctrl("CPU Fan", 1));
-                            c.Add(new Ctrl("Chassis Fan #1", 2));
+                            c.Add(new Control("Chassis Fan #2", 0));
+                            c.Add(new Control("CPU Fan", 1));
+                            c.Add(new Control("Chassis Fan #1", 2));
                         }
 
                         break;
@@ -2053,7 +2127,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
 
@@ -2076,7 +2150,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
                 }
@@ -2102,13 +2176,13 @@ internal sealed class SuperIOHardware : Hardware
                     f.Add(new Fan("Fan #" + (i + 1), i));
 
                 for (int i = 0; i < superIO.Controls.Length; i++)
-                    c.Add(new Ctrl("Fan #" + (i + 1), i));
+                    c.Add(new Control("Fan #" + (i + 1), i));
 
                 break;
         }
     }
 
-    private static void GetNuvotonConfigurationD(ISuperIO superIO, Manufacturer manufacturer, Model model, IList<Voltage> v, IList<Temperature> t, IList<Fan> f, IList<Ctrl> c)
+    private static void GetNuvotonConfigurationD(ISuperIO superIO, Manufacturer manufacturer, Model model, IList<Voltage> v, IList<Temperature> t, IList<Fan> f, IList<Control> c)
     {
         switch (manufacturer)
         {
@@ -2143,7 +2217,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
 
@@ -2183,7 +2257,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
 
@@ -2214,7 +2288,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
 
@@ -2247,13 +2321,13 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("SB Fan", 5));
                         f.Add(new Fan("Chassis #4", 6));
 
-                        c.Add(new Ctrl("Chassis #3", 0));
-                        c.Add(new Ctrl("CPU #1", 1));
-                        c.Add(new Ctrl("CPU #2", 2));
-                        c.Add(new Ctrl("Chassis #1", 3));
-                        c.Add(new Ctrl("Chassis #2", 4));
-                        c.Add(new Ctrl("SB Fan", 5));
-                        c.Add(new Ctrl("Chassis #4", 6));
+                        c.Add(new Control("Chassis #3", 0));
+                        c.Add(new Control("CPU #1", 1));
+                        c.Add(new Control("CPU #2", 2));
+                        c.Add(new Control("Chassis #1", 3));
+                        c.Add(new Control("Chassis #2", 4));
+                        c.Add(new Control("SB Fan", 5));
+                        c.Add(new Control("Chassis #4", 6));
 
                         break;
 
@@ -2282,10 +2356,26 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("CPU Fan #2", 2)); //CPU_FAN2 (WP)
                         f.Add(new Fan("Chipset Fan", 3));
 
-                        c.Add(new Ctrl("CPU Fan #1", 0));
-                        c.Add(new Ctrl("Chassis Fan", 1));
-                        c.Add(new Ctrl("CPU Fan #2", 2));
-                        c.Add(new Ctrl("Chipset Fan", 3));
+                        c.Add(new Control("CPU Fan #1", 0));
+                        c.Add(new Control("Chassis Fan", 1));
+                        c.Add(new Control("CPU Fan #2", 2));
+                        c.Add(new Control("Chipset Fan", 3));
+                        break;
+
+                    case Model.Z790_Taichi:
+                        v.Add(new Voltage("1.8V CPU Voltage", 0));
+                        v.Add(new Voltage("0.82V Chipset Voltage", 1));
+                        v.Add(new Voltage("+3.3V", 3, 34, 34));
+                        v.Add(new Voltage("1.05V CPU Voltage", 4));
+                        v.Add(new Voltage("1.05V Chipset Voltage", 12, 5, 100));
+
+                        f.Add(new Fan("Chassis Fan #5", 0));
+                        f.Add(new Fan("Chassis Fan #6", 1));
+                        f.Add(new Fan("Chassis Fan #3", 6));
+
+                        c.Add(new Control("Chassis Fan #5", 0));
+                        c.Add(new Control("Chassis Fan #6", 1));
+                        c.Add(new Control("Chassis Fan #3", 6));
                         break;
 
                     default:
@@ -2316,7 +2406,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
                 }
@@ -2349,10 +2439,10 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("CPU Fan", 1));
                         f.Add(new Fan("Chassis Fan #2", 2));
                         f.Add(new Fan("Chassis Fan #3", 3));
-                        c.Add(new Ctrl("Chassis Fan #1", 0));
-                        c.Add(new Ctrl("CPU Fan", 1));
-                        c.Add(new Ctrl("Chassis Fan #2", 2));
-                        c.Add(new Ctrl("Chassis Fan #3", 3));
+                        c.Add(new Control("Chassis Fan #1", 0));
+                        c.Add(new Control("CPU Fan", 1));
+                        c.Add(new Control("Chassis Fan #2", 2));
+                        c.Add(new Control("Chassis Fan #3", 3));
 
                         break;
 
@@ -2363,7 +2453,7 @@ internal sealed class SuperIOHardware : Hardware
                         v.Add(new Voltage("+3.3V", 3, 34, 34));
                         v.Add(new Voltage("+12V", 4, 11, 1));
                         v.Add(new Voltage("Voltage #6", 5, true));
-                        v.Add(new Voltage("CPU GFX", 6, 2, 2));
+                        v.Add(new Voltage("CPU Graphics", 6, 2, 2));
                         v.Add(new Voltage("3VSB", 7, 34, 34));
                         v.Add(new Voltage("VBat", 8, 34, 34));
                         v.Add(new Voltage("VTT", 9));
@@ -2384,11 +2474,11 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("Chassis Fan #2", 2));
                         f.Add(new Fan("Chassis Fan #3", 3));
                         f.Add(new Fan("AIO Pump", 4));
-                        c.Add(new Ctrl("Chassis Fan #1", 0));
-                        c.Add(new Ctrl("CPU Fan", 1));
-                        c.Add(new Ctrl("Chassis Fan #2", 2));
-                        c.Add(new Ctrl("Chassis Fan #3", 3));
-                        c.Add(new Ctrl("AIO Pump", 4));
+                        c.Add(new Control("Chassis Fan #1", 0));
+                        c.Add(new Control("CPU Fan", 1));
+                        c.Add(new Control("Chassis Fan #2", 2));
+                        c.Add(new Control("Chassis Fan #3", 3));
+                        c.Add(new Control("AIO Pump", 4));
 
                         break;
 
@@ -2399,7 +2489,7 @@ internal sealed class SuperIOHardware : Hardware
                         v.Add(new Voltage("+3.3V", 3, 34, 34));
                         v.Add(new Voltage("+12V", 4, 11, 1));
                         v.Add(new Voltage("Voltage #6", 5, 0, 1, 0, true));
-                        v.Add(new Voltage("CPU GFX", 6, 2, 2));
+                        v.Add(new Voltage("CPU Graphics", 6, 2, 2));
                         v.Add(new Voltage("3VSB_ATX", 7, 34, 34));
                         v.Add(new Voltage("VBat", 8, 34, 34));
                         v.Add(new Voltage("VTT", 9));
@@ -2425,7 +2515,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan(fanNames[i], i));
 
                         for (int i = 0; i < fanControlNames.Length; i++)
-                            c.Add(new Ctrl(fanControlNames[i], i));
+                            c.Add(new Control(fanControlNames[i], i));
 
                         break;
 
@@ -2474,7 +2564,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
 
@@ -2522,10 +2612,10 @@ internal sealed class SuperIOHardware : Hardware
                         t.Add(new Temperature("PECI 1 Calibrated", 22));
                         t.Add(new Temperature("Virtual", 23));
 
-                        fanControlNames = new[] {"Chassis Fan 1", "CPU Fan", "Chassis Fan 2",
-                            "Chassis Fan 3", "High Amp Fan", "W_PUMP+", "AIO Pump"};
+                        fanControlNames = new[] { "Chassis Fan 1", "CPU Fan", "Chassis Fan 2", "Chassis Fan 3", "High Amp Fan", "Waterpump", "AIO Pump" };
                         System.Diagnostics.Debug.Assert(fanControlNames.Length == superIO.Fans.Length,
                                                         $"Expected {fanControlNames.Length} fan register in the SuperIO chip");
+
                         System.Diagnostics.Debug.Assert(superIO.Fans.Length == superIO.Controls.Length,
                                                         "Expected counts of cans controls and fan speed registers to be equal");
 
@@ -2533,7 +2623,130 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan(fanControlNames[i], i));
 
                         for (int i = 0; i < fanControlNames.Length; i++)
-                            c.Add(new Ctrl(fanControlNames[i], i));
+                            c.Add(new Control(fanControlNames[i], i));
+
+                        break;
+
+                    case Model.ROG_MAXIMUS_X_HERO_WIFI_AC: //NCT6793D
+                        v.Add(new Voltage("Vcore", 0, 2, 2));
+                        v.Add(new Voltage("+5V", 1, 4, 1));
+                        v.Add(new Voltage("AVSB", 2, 34, 34));
+                        v.Add(new Voltage("+3.3V", 3, 34, 34));
+                        v.Add(new Voltage("+12V", 4, 11, 1));
+                        v.Add(new Voltage("Voltage #6", 5, true));
+                        v.Add(new Voltage("CPU Graphics", 6, 2, 2));
+                        v.Add(new Voltage("3VSB", 7, 34, 34));
+                        v.Add(new Voltage("VBat", 8, 34, 34));
+                        v.Add(new Voltage("VTT", 9));
+                        v.Add(new Voltage("DIMM", 10, 1, 1));
+                        v.Add(new Voltage("VCCSA", 11));
+                        v.Add(new Voltage("PCH Core", 12));
+                        v.Add(new Voltage("CPU PLLs", 13));
+                        v.Add(new Voltage("CPU VCCIO/IMC", 14));
+                        t.Add(new Temperature("CPU (PECI)", 0));
+                        t.Add(new Temperature("T2", 1));
+                        t.Add(new Temperature("Motherboard", 2)); //Verified via BIOS and HWinfo. HWinfo had T1 and Motherboard, but thye were the same.
+                        t.Add(new Temperature("Temperature #3", 4));
+                        t.Add(new Temperature("Temperature #4", 5));
+                        t.Add(new Temperature("Temperature #5", 6));
+
+                        // note: CPU_Opt, W_Pump+, EXT_FAN 1 & 2 are on the ASUS EC controller. Together with VRM og PCH temperatures. And additional voltages and power
+                        fanControlNames = new[] { "Chassis Fan 1", "CPU Fan", "Chassis Fan 2", "Chassis Fan 3", "AIO Pump", "HAMP" };
+
+                        for (int i = 0; i < fanControlNames.Length; i++)
+                            f.Add(new Fan(fanControlNames[i], i));
+
+                        for (int i = 0; i < fanControlNames.Length; i++)
+                            c.Add(new Control(fanControlNames[i], i));
+
+                        break;
+
+                    case Model.ROG_MAXIMUS_Z690_FORMULA: //NCT6798D
+                        v.Add(new Voltage("Vcore", 0));
+                        v.Add(new Voltage("+5V", 1, 4, 1));
+                        v.Add(new Voltage("AVSB", 2, 34, 34));
+                        v.Add(new Voltage("3VCC", 3, 34, 34));
+                        v.Add(new Voltage("+12V", 4, 11, 1));
+                        v.Add(new Voltage("IVR Atom L2 Cluster #1", 5));
+                        v.Add(new Voltage("Voltage #7", 6));
+                        v.Add(new Voltage("3VSB", 7, 34, 34));
+                        v.Add(new Voltage("VBat", 8, 34, 34));
+                        v.Add(new Voltage("VTT", 9, 1, 1));
+                        v.Add(new Voltage("Voltage #11", 10));
+                        v.Add(new Voltage("IVR Atom L2 Cluster #0", 11, 1, 1));
+                        v.Add(new Voltage("PCH", 12));
+                        v.Add(new Voltage("Voltage #14", 13));
+                        v.Add(new Voltage("Voltage #15", 14));
+
+                        t.Add(new Temperature("Temperature #1", 0));
+                        t.Add(new Temperature("CPU", 1));
+                        t.Add(new Temperature("Motherboard", 2));
+                        t.Add(new Temperature("Temperature #4", 4));
+                        t.Add(new Temperature("Temperature #5", 5));
+                        t.Add(new Temperature("Temperature #6", 6));
+                        t.Add(new Temperature("Temperature #7", 7));
+                        t.Add(new Temperature("PCH", 12));
+                        t.Add(new Temperature("Temperature #9", 21));
+
+                        fanControlNames = new[] { "Chassis Fan 1", "CPU Fan", "Chassis Fan 2", "Chassis Fan 3", "Chassis Fan 4", "Waterpump", "AIO Pump" };
+
+                        System.Diagnostics.Debug.Assert(fanControlNames.Length == superIO.Fans.Length,
+                                                        $"Expected {fanControlNames.Length} fan register in the SuperIO chip");
+
+                        System.Diagnostics.Debug.Assert(superIO.Fans.Length == superIO.Controls.Length,
+                                                        "Expected counts of cans controls and fan speed registers to be equal");
+
+                        for (int i = 0; i < fanControlNames.Length; i++)
+                            f.Add(new Fan(fanControlNames[i], i));
+
+                        for (int i = 0; i < fanControlNames.Length; i++)
+                            c.Add(new Control(fanControlNames[i], i));
+
+                        break;
+
+                    case Model.ROG_MAXIMUS_Z690_HERO: //NCT6798D
+                        v.Add(new Voltage("Vcore", 0));
+                        v.Add(new Voltage("+5V", 1, 4, 1));
+                        v.Add(new Voltage("AVSB", 2, 34, 34));
+                        v.Add(new Voltage("3VCC", 3, 34, 34));
+                        v.Add(new Voltage("+12V", 4, 11, 1));
+                        v.Add(new Voltage("IVR Atom L2 Cluster #1", 5));
+                        v.Add(new Voltage("Voltage #7", 6));
+                        v.Add(new Voltage("3VSB", 7, 34, 34));
+                        v.Add(new Voltage("VBat", 8, 34, 34));
+                        v.Add(new Voltage("VTT", 9, 1, 1));
+                        v.Add(new Voltage("Voltage #11", 10));
+                        v.Add(new Voltage("IVR Atom L2 Cluster #0", 11, 1, 1));
+                        v.Add(new Voltage("PCH", 12));
+                        v.Add(new Voltage("Voltage #14 ", 13));
+                        v.Add(new Voltage("Voltage #15", 14));
+
+                        t.Add(new Temperature("CPU Package", 0)); // Matches CPU Package in HWinfo & Armoury Crate.
+                        t.Add(new Temperature("CPU Weighted",
+                                              1)); // Unsure about this one. HWinfo & Armoury Crate doesn't have anything that match my values. Varies from 34 (idle) to 42C (under load). Hwinfo is 31-32C for same.
+
+                        t.Add(new Temperature("Motherboard", 2)); // Matches MB in HWinfo & Armoury Crate.
+                        //t.Add(new Temperature("Temperature #4", 4));  // Constant at 15C
+                        //t.Add(new Temperature("Temperature #5", 5));  // Varies from 15C to 123C. Probably bogus
+                        //t.Add(new Temperature("Temperature #6", 6));  // Constant at 32C
+                        //t.Add(new Temperature("Temperature #7", 7));  // Varies from 14C to 124C. Probably bogus
+                        t.Add(new Temperature("PCH", 12)); // Chipset. Match HWinfo & Armoury Crate
+                        t.Add(new Temperature("CPU", 21)); // Matches CPU in HWinfo & Armoury Crate.
+
+                        // note that CPU Opt Fan is on the ASUS EC controller. Together with VRM, T_Sensor, WaterIn, WaterOut and WaterFlow + additional sensors.
+                        fanControlNames = new[] { "Chassis Fan 1", "CPU Fan", "Chassis Fan 2", "Chassis Fan 3", "Chassis Fan 4", "Waterpump", "AIO Pump" };
+
+                        System.Diagnostics.Debug.Assert(fanControlNames.Length == superIO.Fans.Length,
+                                                        $"Expected {fanControlNames.Length} fan register in the SuperIO chip");
+
+                        System.Diagnostics.Debug.Assert(superIO.Fans.Length == superIO.Controls.Length,
+                                                        "Expected counts of cans controls and fan speed registers to be equal");
+
+                        for (int i = 0; i < fanControlNames.Length; i++)
+                            f.Add(new Fan(fanControlNames[i], i));
+
+                        for (int i = 0; i < fanControlNames.Length; i++)
+                            c.Add(new Control(fanControlNames[i], i));
 
                         break;
 
@@ -2580,6 +2793,7 @@ internal sealed class SuperIOHardware : Hardware
                         fanControlNames = new[] { "Chassis Fan 1", "CPU Fan", "Radiator Fan 1", "Radiator Fan 2", "Chassis Fan 2", "Water Pump 1", "Water Pump 2" };
                         System.Diagnostics.Debug.Assert(fanControlNames.Length == superIO.Fans.Length,
                                                         $"Expected {fanControlNames.Length} fan register in the SuperIO chip");
+
                         System.Diagnostics.Debug.Assert(superIO.Fans.Length == superIO.Controls.Length,
                                                         "Expected counts of fan controls and fan speed registers to be equal");
 
@@ -2587,7 +2801,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan(fanControlNames[i], i));
 
                         for (int i = 0; i < fanControlNames.Length; i++)
-                            c.Add(new Ctrl(fanControlNames[i], i));
+                            c.Add(new Control(fanControlNames[i], i));
 
                         break;
 
@@ -2619,7 +2833,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
 
@@ -2686,13 +2900,13 @@ internal sealed class SuperIOHardware : Hardware
                             switch (i)
                             {
                                 case 0:
-                                    c.Add(new Ctrl("Chassis Fan", 0));
+                                    c.Add(new Control("Chassis Fan", 0));
                                     break;
                                 case 1:
-                                    c.Add(new Ctrl("CPU Fan", 1));
+                                    c.Add(new Control("CPU Fan", 1));
                                     break;
                                 case 4:
-                                    c.Add(new Ctrl("AIO Pump", 4));
+                                    c.Add(new Control("AIO Pump", 4));
                                     break;
                             }
                         }
@@ -2701,31 +2915,39 @@ internal sealed class SuperIOHardware : Hardware
 
                     case Model.ROG_ZENITH_II_EXTREME: // NCT6798D
                         // Voltage = value + (value - Vf) * Ri / Rf.
-                        v.Add(new Voltage("Vcore",            0));
-                        v.Add(new Voltage("+5V",              1,  4,  1));
-                        v.Add(new Voltage("+3.3V",            3,  34, 34));
-                        v.Add(new Voltage("+12V",             4,  6,  1));
-                        v.Add(new Voltage("DIMM Voltage CD",  11, 10, 10));
-                        v.Add(new Voltage("DIMM Voltage AB",  13));
+                        v.Add(new Voltage("Vcore", 0));
+                        v.Add(new Voltage("+5V", 1, 4, 1));
+                        v.Add(new Voltage("+3.3V", 3, 34, 34));
+                        v.Add(new Voltage("+12V", 4, 6, 1));
+                        v.Add(new Voltage("DIMM Voltage CD", 11, 10, 10));
+                        v.Add(new Voltage("DIMM Voltage AB", 13));
                         v.Add(new Voltage("1.8V PPL Voltage", 14));
 
-                        t.Add(new Temperature("CPU",             1));
-                        t.Add(new Temperature("Motherboard",     2));
-                        t.Add(new Temperature("Temperature #3",  3));
-                        t.Add(new Temperature("Temperature #4",  4));
-                        t.Add(new Temperature("Temperature #5",  5));
-                        t.Add(new Temperature("Temperature #6",  6));
-                        t.Add(new Temperature("Temperature #7",  7));
+                        t.Add(new Temperature("CPU", 1));
+                        t.Add(new Temperature("Motherboard", 2));
+                        t.Add(new Temperature("Temperature #3", 3));
+                        t.Add(new Temperature("Temperature #4", 4));
+                        t.Add(new Temperature("Temperature #5", 5));
+                        t.Add(new Temperature("Temperature #6", 6));
+                        t.Add(new Temperature("Temperature #7", 7));
                         t.Add(new Temperature("Temperature #21", 21));
 
                         for (int i = 0; i < superIO.Fans.Length; i++)
                         {
                             switch (i)
                             {
-                                case 0: f.Add(new Fan("Chassis Fan", 0)); break;
-                                case 1: f.Add(new Fan("CPU Fan",     1)); break;
-                                case 2: f.Add(new Fan("CPU Optional Fan", 2)); break;
-                                case 4: f.Add(new Fan("AIO Pump",    4)); break;
+                                case 0:
+                                    f.Add(new Fan("Chassis Fan", 0));
+                                    break;
+                                case 1:
+                                    f.Add(new Fan("CPU Fan", 1));
+                                    break;
+                                case 2:
+                                    f.Add(new Fan("CPU Optional Fan", 2));
+                                    break;
+                                case 4:
+                                    f.Add(new Fan("AIO Pump", 4));
+                                    break;
                             }
                         }
 
@@ -2733,10 +2955,18 @@ internal sealed class SuperIOHardware : Hardware
                         {
                             switch (i)
                             {
-                                case 0: c.Add(new Ctrl("Chassis Fan", 0)); break;
-                                case 1: c.Add(new Ctrl("CPU Fan",     1)); break;
-                                case 2: c.Add(new Ctrl("CPU Optional Fan", 2)); break;
-                                case 4: c.Add(new Ctrl("AIO Pump",    4)); break;
+                                case 0:
+                                    c.Add(new Control("Chassis Fan", 0));
+                                    break;
+                                case 1:
+                                    c.Add(new Control("CPU Fan", 1));
+                                    break;
+                                case 2:
+                                    c.Add(new Control("CPU Optional Fan", 2));
+                                    break;
+                                case 4:
+                                    c.Add(new Control("AIO Pump", 4));
+                                    break;
                             }
                         }
 
@@ -2781,16 +3011,17 @@ internal sealed class SuperIOHardware : Hardware
                             switch (i)
                             {
                                 case 0:
-                                    c.Add(new Ctrl("Chassis Fan", 0));
+                                    c.Add(new Control("Chassis Fan", 0));
                                     break;
                                 case 1:
-                                    c.Add(new Ctrl("CPU Fan", 1));
+                                    c.Add(new Control("CPU Fan", 1));
                                     break;
                                 case 4:
-                                    c.Add(new Ctrl("AIO Pump", 4));
+                                    c.Add(new Control("AIO Pump", 4));
                                     break;
                             }
                         }
+
                         break;
 
                     case Model.ROG_STRIX_B550_F_GAMING_WIFI: // NCT6798D-R
@@ -2815,7 +3046,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
 
@@ -2847,7 +3078,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
                 }
@@ -2878,9 +3109,9 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("CPU Fan", 1));
                         f.Add(new Fan("System Fan #1", 2));
                         f.Add(new Fan("System Fan #2", 3));
-                        c.Add(new Ctrl("CPU Fan", 1));
-                        c.Add(new Ctrl("System Fan #1", 2));
-                        c.Add(new Ctrl("System Fan #2", 3));
+                        c.Add(new Control("CPU Fan", 1));
+                        c.Add(new Control("System Fan #1", 2));
+                        c.Add(new Control("System Fan #2", 3));
 
                         break;
 
@@ -2911,12 +3142,12 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("System Fan #2", 3));
                         f.Add(new Fan("System Fan #3", 4));
                         f.Add(new Fan("System Fan #4", 5));
-                        c.Add(new Ctrl("Pump Fan", 0));
-                        c.Add(new Ctrl("CPU Fan", 1));
-                        c.Add(new Ctrl("System Fan #1", 2));
-                        c.Add(new Ctrl("System Fan #2", 3));
-                        c.Add(new Ctrl("System Fan #3", 4));
-                        c.Add(new Ctrl("System Fan #4", 5));
+                        c.Add(new Control("Pump Fan", 0));
+                        c.Add(new Control("CPU Fan", 1));
+                        c.Add(new Control("System Fan #1", 2));
+                        c.Add(new Control("System Fan #2", 3));
+                        c.Add(new Control("System Fan #3", 4));
+                        c.Add(new Control("System Fan #4", 5));
 
                         break;
 
@@ -2944,12 +3175,12 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("System Fan #2", 3));
                         f.Add(new Fan("System Fan #3", 4));
                         f.Add(new Fan("System Fan #4", 5));
-                        c.Add(new Ctrl("Pump Fan", 0));
-                        c.Add(new Ctrl("CPU Fan", 1));
-                        c.Add(new Ctrl("System Fan #1", 2));
-                        c.Add(new Ctrl("System Fan #2", 3));
-                        c.Add(new Ctrl("System Fan #3", 4));
-                        c.Add(new Ctrl("System Fan #4", 5));
+                        c.Add(new Control("Pump Fan", 0));
+                        c.Add(new Control("CPU Fan", 1));
+                        c.Add(new Control("System Fan #1", 2));
+                        c.Add(new Control("System Fan #2", 3));
+                        c.Add(new Control("System Fan #3", 4));
+                        c.Add(new Control("System Fan #4", 5));
 
                         break;
 
@@ -2981,7 +3212,7 @@ internal sealed class SuperIOHardware : Hardware
                             f.Add(new Fan("Fan #" + (i + 1), i));
 
                         for (int i = 0; i < superIO.Controls.Length; i++)
-                            c.Add(new Ctrl("Fan #" + (i + 1), i));
+                            c.Add(new Control("Fan #" + (i + 1), i));
 
                         break;
                 }
@@ -3016,13 +3247,13 @@ internal sealed class SuperIOHardware : Hardware
                     f.Add(new Fan("Fan #" + (i + 1), i));
 
                 for (int i = 0; i < superIO.Controls.Length; i++)
-                    c.Add(new Ctrl("Fan #" + (i + 1), i));
+                    c.Add(new Control("Fan #" + (i + 1), i));
 
                 break;
         }
     }
 
-    private static void GetWinbondConfigurationEhf(Manufacturer manufacturer, Model model, IList<Voltage> v, IList<Temperature> t, IList<Fan> f, IList<Ctrl> c)
+    private static void GetWinbondConfigurationEhf(Manufacturer manufacturer, Model model, IList<Voltage> v, IList<Temperature> t, IList<Fan> f, IList<Control> c)
     {
         switch (manufacturer)
         {
@@ -3041,9 +3272,9 @@ internal sealed class SuperIOHardware : Hardware
                         t.Add(new Temperature("Motherboard", 2));
                         f.Add(new Fan("CPU Fan", 0));
                         f.Add(new Fan("Chassis Fan", 1));
-                        c.Add(new Ctrl("System Fan", 0));
-                        c.Add(new Ctrl("CPU Fan", 1));
-                        c.Add(new Ctrl("Auxiliary Fan", 2));
+                        c.Add(new Control("System Fan", 0));
+                        c.Add(new Control("CPU Fan", 1));
+                        c.Add(new Control("Auxiliary Fan", 2));
 
                         break;
 
@@ -3066,9 +3297,9 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("Auxiliary Fan", 2));
                         f.Add(new Fan("CPU Fan #2", 3));
                         f.Add(new Fan("Auxiliary Fan #2", 4));
-                        c.Add(new Ctrl("System Fan", 0));
-                        c.Add(new Ctrl("CPU Fan", 1));
-                        c.Add(new Ctrl("Auxiliary Fan", 2));
+                        c.Add(new Control("System Fan", 0));
+                        c.Add(new Control("CPU Fan", 1));
+                        c.Add(new Control("Auxiliary Fan", 2));
 
                         break;
                 }
@@ -3094,15 +3325,15 @@ internal sealed class SuperIOHardware : Hardware
                 f.Add(new Fan("Auxiliary Fan", 2));
                 f.Add(new Fan("CPU Fan #2", 3));
                 f.Add(new Fan("Auxiliary Fan #2", 4));
-                c.Add(new Ctrl("System Fan", 0));
-                c.Add(new Ctrl("CPU Fan", 1));
-                c.Add(new Ctrl("Auxiliary Fan", 2));
+                c.Add(new Control("System Fan", 0));
+                c.Add(new Control("CPU Fan", 1));
+                c.Add(new Control("Auxiliary Fan", 2));
 
                 break;
         }
     }
 
-    private static void GetWinbondConfigurationHg(Manufacturer manufacturer, Model model, IList<Voltage> v, IList<Temperature> t, IList<Fan> f, IList<Ctrl> c)
+    private static void GetWinbondConfigurationHg(Manufacturer manufacturer, Model model, IList<Voltage> v, IList<Temperature> t, IList<Fan> f, IList<Control> c)
     {
         switch (manufacturer)
         {
@@ -3121,9 +3352,9 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("Chassis Fan", 0));
                         f.Add(new Fan("CPU Fan", 1));
                         f.Add(new Fan("Power Fan", 2));
-                        c.Add(new Ctrl("System Fan", 0));
-                        c.Add(new Ctrl("CPU Fan", 1));
-                        c.Add(new Ctrl("Auxiliary Fan", 2));
+                        c.Add(new Control("System Fan", 0));
+                        c.Add(new Control("CPU Fan", 1));
+                        c.Add(new Control("Auxiliary Fan", 2));
 
                         break;
 
@@ -3145,9 +3376,9 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("Auxiliary Fan", 2));
                         f.Add(new Fan("CPU Fan #2", 3));
                         f.Add(new Fan("Auxiliary Fan #2", 4));
-                        c.Add(new Ctrl("System Fan", 0));
-                        c.Add(new Ctrl("CPU Fan", 1));
-                        c.Add(new Ctrl("Auxiliary Fan", 2));
+                        c.Add(new Control("System Fan", 0));
+                        c.Add(new Control("CPU Fan", 1));
+                        c.Add(new Control("Auxiliary Fan", 2));
 
                         break;
                 }
@@ -3173,9 +3404,9 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("Power Fan", 2));
                         f.Add(new Fan("Chassis Fan #2", 3));
                         f.Add(new Fan("Chassis Fan #3", 4));
-                        c.Add(new Ctrl("System Fan", 0));
-                        c.Add(new Ctrl("CPU Fan", 1));
-                        c.Add(new Ctrl("Auxiliary Fan", 2));
+                        c.Add(new Control("System Fan", 0));
+                        c.Add(new Control("CPU Fan", 1));
+                        c.Add(new Control("Auxiliary Fan", 2));
 
                         break;
 
@@ -3194,9 +3425,9 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("Power Fan", 2));
                         f.Add(new Fan("Chassis Fan #2", 3));
                         f.Add(new Fan("Chassis Fan #3", 4));
-                        c.Add(new Ctrl("System Fan", 0));
-                        c.Add(new Ctrl("CPU Fan", 1));
-                        c.Add(new Ctrl("Auxiliary Fan", 2));
+                        c.Add(new Control("System Fan", 0));
+                        c.Add(new Control("CPU Fan", 1));
+                        c.Add(new Control("Auxiliary Fan", 2));
 
                         break;
 
@@ -3218,9 +3449,9 @@ internal sealed class SuperIOHardware : Hardware
                         f.Add(new Fan("Auxiliary Fan", 2));
                         f.Add(new Fan("CPU Fan #2", 3));
                         f.Add(new Fan("Auxiliary Fan #2", 4));
-                        c.Add(new Ctrl("System Fan", 0));
-                        c.Add(new Ctrl("CPU Fan", 1));
-                        c.Add(new Ctrl("Auxiliary Fan", 2));
+                        c.Add(new Control("System Fan", 0));
+                        c.Add(new Control("CPU Fan", 1));
+                        c.Add(new Control("Auxiliary Fan", 2));
 
                         break;
                 }
@@ -3245,9 +3476,9 @@ internal sealed class SuperIOHardware : Hardware
                 f.Add(new Fan("Auxiliary Fan", 2));
                 f.Add(new Fan("CPU Fan #2", 3));
                 f.Add(new Fan("Auxiliary Fan #2", 4));
-                c.Add(new Ctrl("System Fan", 0));
-                c.Add(new Ctrl("CPU Fan", 1));
-                c.Add(new Ctrl("Auxiliary Fan", 2));
+                c.Add(new Control("System Fan", 0));
+                c.Add(new Control("CPU Fan", 1));
+                c.Add(new Control("Auxiliary Fan", 2));
 
                 break;
         }
@@ -3314,63 +3545,4 @@ internal sealed class SuperIOHardware : Hardware
     private delegate float? ReadValueDelegate(int index);
 
     private delegate void UpdateDelegate();
-
-    private class Voltage
-    {
-        public readonly bool Hidden;
-        public readonly int Index;
-        public readonly string Name;
-        public readonly float Rf;
-        public readonly float Ri;
-        public readonly float Vf;
-
-        public Voltage(string name, int index, bool hidden = false) : this(name, index, 0, 1, 0, hidden)
-        { }
-
-        public Voltage(string name, int index, float ri, float rf, float vf = 0, bool hidden = false)
-        {
-            Name = name;
-            Index = index;
-            Ri = ri;
-            Rf = rf;
-            Vf = vf;
-            Hidden = hidden;
-        }
-    }
-
-    private class Temperature
-    {
-        public readonly int Index;
-        public readonly string Name;
-
-        public Temperature(string name, int index)
-        {
-            Name = name;
-            Index = index;
-        }
-    }
-
-    private class Fan
-    {
-        public readonly int Index;
-        public readonly string Name;
-
-        public Fan(string name, int index)
-        {
-            Name = name;
-            Index = index;
-        }
-    }
-
-    private class Ctrl
-    {
-        public readonly int Index;
-        public readonly string Name;
-
-        public Ctrl(string name, int index)
-        {
-            Name = name;
-            Index = index;
-        }
-    }
 }
